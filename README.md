@@ -13,4 +13,6 @@ git init
 git commit -m "Initial commit of YourDSPBlock."
 ```
 
-Don't forget to add a new remote!
+Change the name of your block in **build.sbt**.
+
+Don't forget to update the readme, add a new remote, & push!
