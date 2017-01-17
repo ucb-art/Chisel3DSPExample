@@ -15,4 +15,4 @@ git commit -m "Initial commit of YourDSPBlock."
 
 Change the name of your block in **build.sbt**.
 
-Don't forget to update the readme, add a new remote, & push (and delete the example directory in *src/test/scala*)!
+Don't forget to update the readme, add a new remote, & push (and delete the *Examples directories in *src/test/scala*)! Note that *src/test/scala/UsefulExamples* will be updated with snippets of code that you'll probably end up using to make your DSP blocks. 
