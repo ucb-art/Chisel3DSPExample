@@ -93,8 +93,16 @@ class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolea
   val litB = Bool(true)
   val litU = posLit.round.toInt.U
   val litC = DspComplex(FixedPoint.fromDouble(posLit, binaryPoint = bp), FixedPoint.fromDouble(negLit, binaryPoint = bp))
-  val lutGen = Vec(lutVals map {x => genShort.double2TFixedWidth(x)})
-  val lutS = Vec(lutVals map (_.round.toInt.S))
+  
+
+  val lutGenSeq = lutVals map {x => genShort.double2TFixedWidth(x)}
+  val lutSSeq = lutVals map (_.round.toInt.S(p.smallW.W))
+
+  val lutGen = Vec(lutGenSeq)
+  val lutS = Vec(lutSSeq)
+
+  io.o.genS := lutGen(io.i.uS)
+  io.o.sS := lutS(io.i.uS)
 
 }
 
@@ -129,14 +137,25 @@ class LitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) 
   dspPeek(c.litC)
   dspExpect(c.litC, Complex(posLit, negLit))
 
-  peek(c.lutS)
-  c.lutS.zipWithIndex foreach { case (x,i) => {
-    expect(x, lutVals(i).round.toInt) } }
+  // peek(c.lutS) doesn't work -- can't peek elements of Vec[Lit]
+  c.lutSSeq.zipWithIndex foreach { case (x, i) => {
+    peek(x)
+    expect(x, lutVals(i).round.toInt) }}
 
-  peek(c.lutGen)
-  c.lutGen.zipWithIndex foreach { case (x, i) => {
-    dspExpect(x, lutVals(i))
-  } }
+  c.lutGenSeq.zipWithIndex foreach { case (x, i) => {
+    dspPeek(x)
+    dspExpect(x, lutVals(i)) }}
+
+  c.lutVals.zipWithIndex foreach { case (x, i) => {
+    poke(c.io.i.uS, i)
+    dspPeek(c.io.o.genS)
+    dspExpect(c.io.o.genS, x)
+    dspPeek(c.io.o.sS)
+    expect(c.io.o.sS, x.round)
+  }}
+
+  dspPeek(c.lutGenSeq(0))
+  dspPeek(c.lutSSeq(0))
 }
 
 class SimpleTBSpec extends FlatSpec with Matchers {
@@ -147,21 +166,26 @@ class SimpleTBSpec extends FlatSpec with Matchers {
       backendName = "verilator",
       isGenVerilog = true)
 
-
-  behavior of "simple module io + lits"
-
-  it should "read lits with gen = sint properly" in {
-    val options = new VerboseDspTesterOptionsManager {
+  val optionsPass = new VerboseDspTesterOptionsManager {
       verboseDspTesterOptions = VerboseDspTesterOptions(
+          fixTolLSBs = 1,
           genVerilogTb = false,
           isVerbose = true)
       testerOptions = testerOptionsGlobal
     }
-    val includeR = true
-    dsptools.Driver.execute(() => new SimpleModule(p.genShortS, p.genLongS, includeR, p), options) { c =>
+
+  behavior of "simple module io + lits"
+
+  it should "read lits with gen = sint properly" in {
+    dsptools.Driver.execute(() => new SimpleModule(p.genShortS, p.genLongS, includeR = true, p), optionsPass) { c =>
       new LitTester(c)
     } should be (true)
+  }
 
+  it should "read lits with gen = fixed properly" in {
+    dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
+      new LitTester(c)
+    } should be (true)
   }
 
 }
