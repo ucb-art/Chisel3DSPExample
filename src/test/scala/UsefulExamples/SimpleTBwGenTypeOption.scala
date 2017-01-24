@@ -19,7 +19,7 @@ case class TestParams(
     val vecLen: Int = 4,
     val posLit: Double = 3.3,
     val negLit: Double = -3.3,
-    val lutVals: Seq[Double] = Seq(-3.3, -2.2, -1.1, 0, 1.1, 2.2, 3.3),
+    val lutVals: Seq[Double] = Seq(-3.3, -2.2, -1.1, -0.55, -0.4, 0.4, 0.55, 1.1, 2.2, 3.3),
     val bp: Int = 4) {
 
   val genLongF = FixedPoint(biggerW.W, bigBP.BP)
@@ -107,7 +107,7 @@ class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolea
 
 }
 
-class LitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) {
+class PassLitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) {
   
   val posLit = c.posLit
   val negLit = c.negLit
@@ -151,12 +151,47 @@ class LitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) 
     poke(c.io.i.uS, i)
     dspPeek(c.io.o.genS)
     dspExpect(c.io.o.genS, x)
-    dspPeek(c.io.o.sS)
-    expect(c.io.o.sS, x.round)
+
+    // How to change expect tolerance (for Lits; SInts should match exactly)
+    // dspExpect automatically rounds when data is SInt (whereas expect doesn't)
+    fixTolLSBs.withValue(0) {
+      dspPeek(c.io.o.sS)
+      dspExpect(c.io.o.sS, x)
+    }
+
   }}
 
   dspPeek(c.lutGenSeq(0))
   dspPeek(c.lutSSeq(0))
+}
+
+
+class FailLitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) {
+  
+  val posLit = c.posLit
+  val negLit = c.negLit
+  val lutVals = c.lutVals
+
+  c.pos.elements foreach { case (s, d) => {
+    d match {
+      case f: FixedPoint => dspExpect(f, posLit)
+      case _ => } } }
+
+  c.neg.elements foreach { case (s, d) => {
+    d match {
+      case f: FixedPoint => dspExpect(f, negLit)
+      case _ => } } }
+
+  dspExpect(c.litC, Complex(posLit, negLit))
+
+  c.lutGenSeq.zipWithIndex foreach { case (x, i) => {
+    dspExpect(x, lutVals(i)) }}
+
+  c.lutVals.zipWithIndex foreach { case (x, i) => {
+    poke(c.io.i.uS, i)
+    dspExpect(c.io.o.genS, x)
+  }}
+
 }
 
 class SimpleTBSpec extends FlatSpec with Matchers {
@@ -175,18 +210,31 @@ class SimpleTBSpec extends FlatSpec with Matchers {
       testerOptions = testerOptionsGlobal
     }
 
+  val optionsFail = new VerboseDspTesterOptionsManager {
+    verboseDspTesterOptions = optionsPass.verboseDspTesterOptions.copy(fixTolLSBs = 0)
+    testerOptions = testerOptionsGlobal
+  }
+
   behavior of "simple module io + lits"
 
-  it should "read lits with gen = sint properly" in {
+  it should "properly read lits with gen = sint (reals rounded) and expect tolerance set to 1 bit" in {
     dsptools.Driver.execute(() => new SimpleModule(p.genShortS, p.genLongS, includeR = true, p), optionsPass) { c =>
-      new LitTester(c)
+      new PassLitTester(c)
     } should be (true)
   }
 
-  it should "read lits with gen = fixed properly" in {
+  it should "properly read lits with gen = fixed and expect tolerance set to 1 bit " +
+      " (even with finite fractional bits)" in {
     dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
-      new LitTester(c)
+      new PassLitTester(c)
     } should be (true)
+  }
+
+  it should "*fail* to read all lits with gen = fixed when expect tolerance is set to 0 bits " + 
+      "(due to not having enough fractional bits to represent #s)" in {
+    dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsFail) { c =>
+      new FailLitTester(c)
+    } should be (false)
   }
 
 }
