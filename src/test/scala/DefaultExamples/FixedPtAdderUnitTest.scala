@@ -8,6 +8,7 @@ import dsptools.numbers._
 import dsptools.numbers.implicits._
 import org.scalatest.{FlatSpec, Matchers}
 import spire.algebra.Ring
+import chisel3.experimental.FixedPoint
 
 //scalastyle:off magic.number
 

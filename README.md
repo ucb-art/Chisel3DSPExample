@@ -1,7 +1,9 @@
 Chisel3 DSP Template
 ===================
 
-This repo requires that you've setup + updated [Chisel3DSPDependencies](https://github.com/ucb-art/Chisel3DSPDependencies/blob/master/README.md) somewhere. Then you can run `sbt test` in this directory to run tests on example code. 
+This repo requires that you've setup + updated [Chisel3DSPDependencies](https://github.com/ucb-art/Chisel3DSPDependencies/blob/master/README.md) somewhere. Don't forget to go into the **Chisel3DSPDependencies** directory and `source setenv.bash` each time you start a new session (unless you're doing `source update.bash` for the first time! Then you can run `sbt test` in this directory to run tests on example code. 
+
+> Note: If you want to run a particular set of tests (i.e. whatever tests in `class SimpleTBSpec extends FlatSpec with Matchers`), you can use something like `sbt "test-only SimpleTB.SimpleTBSpec"` (consisting of packageName.testName). 
 
 You can use this repo as a starting point for your own DSP blocks by cloning and then re-initializing the repo via:
 
