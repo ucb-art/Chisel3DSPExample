@@ -17,7 +17,6 @@ case class TestParams(
     val bigW: Int = 16,
     val smallBP: Int = 4,
     val bigBP: Int = 8,
-    val vecLen: Int = 4,
     val posLit: Double = 3.3,
     val negLit: Double = -3.3,
     val lutVals: Seq[Double] = Seq(-3.3, -2.2, -1.1, -0.55, -0.4, 0.4, 0.55, 1.1, 2.2, 3.3)) {
@@ -27,6 +26,7 @@ case class TestParams(
   val genLongS = SInt(bigW.W)
   val genShortS = SInt(smallW.W)
   val genR = DspReal()
+  val vecLen = lutVals.length
 
 }
 
@@ -57,6 +57,7 @@ class Interface[R <: Data:Real](genShort: R, genLong: R, includeR: Boolean, p: T
 
   val vU = Vec(vecLen, UInt(smallW))
   val vS = Vec(vecLen, SInt(smallW))  
+  val vF = Vec(vecLen, FixedPoint(bigW, smallBP))  
   
   override def cloneType: this.type = new Interface(genShort, genLong, includeR, p).asInstanceOf[this.type]
 }
@@ -72,7 +73,18 @@ class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolea
     val i = Input(new Interface(genShort, genLong, includeR, p))
     val o = Output(new Interface(genShort, genLong, includeR, p)) }) 
 
-  //io.o.long <> RegNext(io.i.short) 
+  io.o.long <> RegNext(io.i.short) 
+  io.o.short <> RegNext(io.i.long)
+
+  if (includeR) io.o.r.get := RegNext(io.i.r.get)
+  io.o.b := RegNext(io.i.b)
+  io.o.cGenL := RegNext(io.i.cGenL)
+  io.o.cFS := RegNext(io.i.cFS)
+  io.o.cR := RegNext(io.i.cR)
+
+  io.o.vU := RegNext(io.i.vU)
+  io.o.vS := RegNext(io.i.vS)
+  io.o.vF := RegNext(io.i.vF)
 
   val litRP = if (includeR) Some(DspReal(posLit)) else None
   val litRN = if (includeR) Some(DspReal(negLit)) else None
@@ -163,6 +175,33 @@ class PassLitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester
   dspPeek(c.lutSSeq(0))
 }
 
+class PassIOTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) {
+  
+  val lutVals = c.lutVals
+  val io = c.io
+
+  (lutVals :+ lutVals.head).zipWithIndex foreach { case (value, i) => {
+    (io.i.short.elements.unzip._2 ++ io.i.long.elements.unzip._2) foreach { _ match {
+      case u: UInt => poke(u, math.abs(value.round))
+      case r => dspPoke(r, value)
+    }}
+    if (i != 0) {
+      val prevVal = lutVals(i-1)
+      (io.o.short.elements.unzip._2 ++ io.o.long.elements.unzip._2) foreach { _ match {
+        case u: UInt => {
+          peek(u)
+          expect(u, math.abs(prevVal.round))
+        }
+        case r => {
+          dspPeek(r)
+          dspExpect(r, prevVal)
+        }
+      }}
+    }
+    step(1)
+  }}
+
+}
 
 class FailLitTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(c) {
   
@@ -225,6 +264,18 @@ class SimpleTBSpec extends FlatSpec with Matchers {
       " (even with finite fractional bits)" in {
     dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
       new PassLitTester(c)
+    } should be (true)
+  }
+
+  it should "properly poke/peek io delayed 1 cycle with gen = sint (reals rounded) and expect tolerance set to 1 bit" in {
+    dsptools.Driver.execute(() => new SimpleModule(p.genShortS, p.genLongS, includeR = true, p), optionsPass) { c =>
+      new PassIOTester(c)
+    } should be (true)
+  }
+
+  it should "properly poke/peek io delayed 1 cycle with gen = fixed and expect tolerance set to 1 bit" in {
+    dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
+      new PassIOTester(c)
     } should be (true)
   }
 
