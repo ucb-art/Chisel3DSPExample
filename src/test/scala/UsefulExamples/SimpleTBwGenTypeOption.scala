@@ -35,7 +35,7 @@ class DataTypeBundle[R <: Data:Real](genType: R, width: Width, binaryPoint: Bina
   val s = SInt(width)
   val f = FixedPoint(width, binaryPoint)
   val u = UInt(width)
-  override def cloneType: this.type = new DataTypeBundle(gen, width, binaryPoint).asInstanceOf[this.type]
+  override def cloneType: this.type = new DataTypeBundle(genType, width, binaryPoint).asInstanceOf[this.type]
 }
 
 class Interface[R <: Data:Real](genShort: R, genLong: R, includeR: Boolean, p: TestParams) extends Bundle {
