@@ -62,7 +62,7 @@ class Interface[R <: Data:Real](genShort: R, genLong: R, includeR: Boolean, p: T
   override def cloneType: this.type = new Interface(genShort, genLong, includeR, p).asInstanceOf[this.type]
 }
 
-class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolean, p: TestParams) extends Module {
+class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolean, val p: TestParams) extends Module {
 
   val posLit = p.posLit
   val negLit = p.negLit
@@ -103,7 +103,9 @@ class SimpleModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Boolea
 
   val litB = Bool(true)
   val litU = posLit.round.toInt.U
-  val litC = DspComplex(FixedPoint.fromDouble(posLit, binaryPoint = bp), FixedPoint.fromDouble(negLit, binaryPoint = bp))
+  val litC = DspComplex(
+      FixedPoint.fromDouble(posLit, binaryPoint = bp), 
+      FixedPoint.fromDouble(negLit, binaryPoint = bp))
   
 
   val lutGenSeq = lutVals map {x => genShort.double2TFixedWidth(x)}
@@ -187,7 +189,7 @@ class PassIOTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(
     }}
     if (i != 0) {
       val prevVal = lutVals(i-1)
-      (io.o.short.elements.unzip._2 ++ io.o.long.elements.unzip._2) foreach { _ match {
+      io.o.short.elements.unzip._2 foreach { _ match {
         case u: UInt => {
           peek(u)
           expect(u, math.abs(prevVal.round))
@@ -197,6 +199,19 @@ class PassIOTester[R <: Data:Real](c: SimpleModule[R]) extends VerboseDspTester(
           dspExpect(r, prevVal)
         }
       }}
+      // Since long outputs come from short inputs, the tolerance must match that of smallBP
+      fixTolLSBs.withValue(c.p.bigBP - c.p.smallBP + fixTolLSBs.value) {
+        io.o.long.elements.unzip._2 foreach { _ match {
+          case u: UInt => {
+            peek(u)
+            expect(u, math.abs(prevVal.round))
+          }
+          case r => {
+            dspPeek(r)
+            dspExpect(r, prevVal)
+          }
+        }}
+      }
     }
     step(1)
   }}
@@ -261,13 +276,14 @@ class SimpleTBSpec extends FlatSpec with Matchers {
   }
 
   it should "properly read lits with gen = fixed and expect tolerance set to 1 bit " +
-      " (even with finite fractional bits)" in {
+      "(even with finite fractional bits)" in {
     dsptools.Driver.execute(() => new SimpleModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
       new PassLitTester(c)
     } should be (true)
   }
 
-  it should "properly poke/peek io delayed 1 cycle with gen = sint (reals rounded) and expect tolerance set to 1 bit" in {
+  it should "properly poke/peek io delayed 1 cycle with gen = sint (reals rounded) " +
+      "and expect tolerance set to 1 bit" in {
     dsptools.Driver.execute(() => new SimpleModule(p.genShortS, p.genLongS, includeR = true, p), optionsPass) { c =>
       new PassIOTester(c)
     } should be (true)
