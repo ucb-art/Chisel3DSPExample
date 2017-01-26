@@ -99,7 +99,7 @@ class Interface[R <: Data:Real](genShort: R, genLong: R, includeR: Boolean, p: T
   val b = Bool()
   val cGenL = DspComplex(genLong)
   val cFS = DspComplex(FixedPoint(bigW, smallBP))
-  val cR = DspComplex(DspReal())
+  val cR = if (includeR) Some(DspComplex(DspReal())) else None
 
   val short = new DataTypeBundle(genShort, smallW, smallBP)
   val long = new DataTypeBundle(genLong, bigW, bigBP)
@@ -126,7 +126,7 @@ class SimpleIOModule[R <: Data:Real](genShort: R, genLong: R, val includeR: Bool
   io.o.b := RegNext(io.i.b)
   io.o.cGenL := RegNext(io.i.cGenL)
   io.o.cFS := RegNext(io.i.cFS)
-  io.o.cR := RegNext(io.i.cR)
+  if (includeR) io.o.cR.get := RegNext(io.i.cR.get)
 
   io.o.vU := RegNext(io.i.vU)
   io.o.vS := RegNext(io.i.vS)
@@ -192,7 +192,7 @@ class PassIOTester[R <: Data:Real](c: SimpleIOModule[R]) extends VerboseDspTeste
     feed(io.i.b, value)
     feed(io.i.cGenL, complexVal)
     feed(io.i.cFS, complexVal)
-    feed(io.i.cR, complexVal)
+    if (c.includeR) feed(io.i.cR.get, complexVal)
     if (i != 0) {
       val prevVal = lutVals(i-1)
       val prevComplexVal = Complex(prevVal, -prevVal)
@@ -201,7 +201,7 @@ class PassIOTester[R <: Data:Real](c: SimpleIOModule[R]) extends VerboseDspTeste
       checkP(io.o.b, prevVal)
       checkP(io.o.cGenL, prevComplexVal)
       checkP(io.o.cFS, prevComplexVal)
-      checkP(io.o.cR, prevComplexVal)
+      if (c.includeR) checkP(io.o.cR.get, prevComplexVal)
       // Since long outputs come from short inputs, the tolerance must match that of smallBP
       fixTolLSBs.withValue(c.p.bigBP - c.p.smallBP + fixTolLSBs.value) {
         io.o.long.elements.unzip._2 foreach { a => checkP(a, prevVal) }
@@ -216,7 +216,7 @@ class PassIOTester[R <: Data:Real](c: SimpleIOModule[R]) extends VerboseDspTeste
     feed(io.i.vF(i), value)
   }}
 
-  step(1)
+  step(5)
   lutVals.reverse.zipWithIndex foreach { case (value, i) => {
     feed(io.i.vU(i), value)
     feed(io.i.vS(i), value)
@@ -226,7 +226,7 @@ class PassIOTester[R <: Data:Real](c: SimpleIOModule[R]) extends VerboseDspTeste
     checkP(io.o.vF(i), lutVals(i))
   }}
 
-  step(1)
+  step(5)
   lutVals.reverse.zipWithIndex foreach { case (value, i) => {
     feed(io.i.vU(i), 0)
     feed(io.i.vS(i), 0)
@@ -331,12 +331,19 @@ object TestSetup {
     verboseDspTesterOptions = optionsPass.verboseDspTesterOptions.copy(fixTolLSBs = 0)
     testerOptions = testerOptionsGlobal
   }
+
+  val optionsPassTB = new VerboseDspTesterOptionsManager {
+    verboseDspTesterOptions = optionsPass.verboseDspTesterOptions.copy(genVerilogTb = true)
+    testerOptions = testerOptionsGlobal
+  }
+
 }
 
 class SimpleTBSpec extends FlatSpec with Matchers {
 
   val p = TestSetup.p
   val optionsPass = TestSetup.optionsPass
+  val optionsPassTB = TestSetup.optionsPassTB
   val optionsFail = TestSetup.optionsFail
 
   behavior of "simple module lits"
@@ -374,6 +381,21 @@ class SimpleTBSpec extends FlatSpec with Matchers {
     dsptools.Driver.execute(() => new SimpleIOModule(p.genShortF, p.genLongF, includeR = true, p), optionsPass) { c =>
       new PassIOTester(c)
     } should be (true)
+  }
+
+  it should "properly poke/peek io delayed 1 cycle with gen = fixed + print TB (no reals)" in {
+    this.synchronized {
+      var tbFileLoc: String = ""
+      dsptools.Driver.execute(() => new SimpleIOModule(p.genShortF, p.genLongF, includeR = false, p), 
+          optionsPassTB) { c => {
+        val tester = new PassIOTester(c)
+        tbFileLoc = tester.tbFileName
+        tester
+      } } should be (true)
+      def read(file: String) = scala.io.Source.fromFile(file).getLines.mkString("\n")
+      val tbTxt = read(tbFileLoc).stripMargin
+      require(tbTxt == TbGoldenModel.txt, "Test bench incorrect! (compared against simulated model)")
+    }
   }
 
 }
