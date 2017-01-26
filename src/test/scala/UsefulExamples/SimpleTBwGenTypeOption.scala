@@ -79,12 +79,12 @@ case class TestParams(
 
 }
 
-class DataTypeBundle[R <: Data:Real](genType: R, width: Width, binaryPoint: BinaryPoint) extends Bundle {
+class DataTypeBundle[R <: Data:Real](genType: R, dataWidth: Width, binaryPoint: BinaryPoint) extends Bundle {
   val gen = genType.chiselCloneType
-  val s = SInt(width)
-  val f = FixedPoint(width, binaryPoint)
-  val u = UInt(width)
-  override def cloneType: this.type = new DataTypeBundle(genType, width, binaryPoint).asInstanceOf[this.type]
+  val s = SInt(dataWidth)
+  val f = FixedPoint(dataWidth, binaryPoint)
+  val u = UInt(dataWidth)
+  override def cloneType: this.type = new DataTypeBundle(genType, dataWidth, binaryPoint).asInstanceOf[this.type]
 }
 
 class Interface[R <: Data:Real](genShort: R, genLong: R, includeR: Boolean, p: TestParams) extends Bundle {
@@ -392,9 +392,13 @@ class SimpleTBSpec extends FlatSpec with Matchers {
         tbFileLoc = tester.tbFileName
         tester
       } } should be (true)
-      def read(file: String) = scala.io.Source.fromFile(file).getLines.mkString("\n")
-      val tbTxt = read(tbFileLoc).stripMargin
-      require(tbTxt == TbGoldenModel.txt, "Test bench incorrect! (compared against simulated model)")
+      val tbTxt = scala.io.Source.fromFile(tbFileLoc).getLines
+      // This is a lot easier in Scala 2.12.x
+      val resourceGoldenModel = getClass.getResourceAsStream("/TBGoldenModel.v")
+      val TbGoldenModelTxt = scala.io.Source.fromInputStream(resourceGoldenModel).getLines
+      TbGoldenModelTxt.zip(tbTxt) foreach { case (expected, in) =>
+        (expected == in) should be (true)
+      }
     }
   }
 
