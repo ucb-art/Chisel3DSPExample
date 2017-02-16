@@ -37,7 +37,7 @@ recordHash := {
       pw.write(hash.toString)
       pw.close
     } catch {
-      case e: Exception => println("Run setenv.sh in your Chisel3DSPDependencies directory!")
+      case e: Exception => println("Run source setenv.bash in your Chisel3DSPDependencies directory!")
       System.exit(0)
     } 
 }
