@@ -9,12 +9,13 @@ resolvers ++= Seq(
   Resolver.sonatypeRepo("releases"))
 
 val defaultVersions = Map(
+  "tapeout" -> "0.1-SNAPSHOT",
   "firrtl" -> "1.1-SNAPSHOT",
   "dsptools" -> "1.0",
   "chisel3" -> "3.1-SNAPSHOT",
   "chisel-iotesters" -> "1.2-SNAPSHOT")
 
-libraryDependencies ++= (Seq("chisel3","chisel-iotesters","dsptools","firrtl").map {
+libraryDependencies ++= (Seq("chisel3","chisel-iotesters","dsptools","firrtl", "tapeout").map {
   dep: String => "edu.berkeley.cs" %% dep % sys.props.getOrElse(dep + "Version", defaultVersions(dep)) })
 
 libraryDependencies += "org.spire-math" %% "spire" % "0.11.0"
