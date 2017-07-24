@@ -17,6 +17,9 @@ import iotesters.TesterOptions
 // Scala unit testing style
 import org.scalatest.{FlatSpec, Matchers}
 
+import chisel3.experimental.{ChiselRange, Interval}
+import chisel3.internal.firrtl.KnownIntervalRange
+
 // IO Bundle. Note that when you parameterize the bundle, you MUST override cloneType.
 // This also creates x, y, z inputs/outputs (direction must be specified at some IO hierarchy level)
 // of the type you specify via gen (must be Data:RealBits = UInt, SInt, FixedPoint, DspReal)
@@ -36,8 +39,11 @@ class SimpleDspModule[T <: Data:RealBits](gen: T, val addPipes: Int) extends Mod
   // add addPipes # of ShiftRegister after the sum. If you don't wrap the sum in 
   // DspContext.withNumAddPipes(addPipes), the default # of addPipes is used.
   DspContext.withNumAddPipes(addPipes) { 
-    io.z := io.x + io.y
+    io.z := io.x context_+ io.y
   }
+
+  val in1 = Input(Interval(6.W, 3.BP, range"[0,4]"))
+
 }
 
 // You create a tester that must extend DspTester to support Dsp type peeks/pokes (with doubles, complex, etc.)
